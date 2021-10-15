@@ -66,4 +66,22 @@ public class JWTUtil {
             return null;
         }
     }
+
+    public static Integer identify(String token) {
+        Map<String, Claim> payload = decode_auth_token(token);
+        if (null == payload) {
+            return null;
+        }
+        if (payload.containsKey("user_id") && payload.containsKey("flag")) {
+            Integer flag = payload.get("flag").asInt();
+            // access token
+            if (0 == flag) {
+                return payload.get("user_id").asInt();
+            } else {
+                return null;
+            }
+        } else {
+            return null;
+        }
+    }
 }
