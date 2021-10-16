@@ -1,18 +1,20 @@
 package com.zju.manager_svr.controller;
 
-import java.util.Map;
-import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import javax.servlet.http.HttpSession;
 
 import com.auth0.jwt.interfaces.Claim;
 import com.zju.manager_svr.annotation.LoginRequire;
 import com.zju.manager_svr.exception.DeleteUploadException;
+import com.zju.manager_svr.model.dto.AddPatientForm;
 import com.zju.manager_svr.model.dto.DoctorInfo;
 import com.zju.manager_svr.model.dto.LoginForm;
 import com.zju.manager_svr.model.dto.PatientForm;
+import com.zju.manager_svr.model.dto.RefreshForm;
 import com.zju.manager_svr.model.dto.RegisterForm;
 import com.zju.manager_svr.model.dto.ReturnBean;
 import com.zju.manager_svr.model.dto.UpdateInfoForm;
@@ -36,12 +38,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import lombok.extern.slf4j.Slf4j;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import springfox.documentation.annotations.ApiIgnore;
 
+@Api("Manager API")
 @RestController
 @RequestMapping("/api")
 @CrossOrigin
-@Slf4j
 public class ApiController {
 
     @Autowired
@@ -50,6 +54,7 @@ public class ApiController {
     @Autowired
     private PatientService patientService;
 
+    @ApiOperation("用户注册")
     @PostMapping("/register")
     public ReturnBean register(@RequestBody @Validated RegisterForm form) {
         form.setPassword(HashUtil.encode(form.getPassword()));
@@ -60,6 +65,7 @@ public class ApiController {
         return ReturnBean.failReturn(null, "注册失败");
     }
 
+    @ApiOperation("登录")
     @PostMapping("/login")
     public ReturnBean login(@RequestBody @Validated LoginForm form) {
         User user = userService.findUserByUsername(form.getUsername());
@@ -72,12 +78,10 @@ public class ApiController {
         return ReturnBean.successReturn(data, "login: 登陆成功");
     }
 
+    @ApiOperation("刷新token")
     @PostMapping("/refreshToken")
-    public ReturnBean refreshToken(@RequestBody Map<String, Object> map) {
-        String token = (String) map.getOrDefault("refresh_token", "");
-        if (token.isBlank()) {
-            return ReturnBean.failReturn("", "refreshToken: 参数错误");
-        }
+    public ReturnBean refreshToken(@RequestBody @Validated RefreshForm form) {
+        String token = form.getRefreshToken();
         Map<String, Claim> payload = JWTUtil.decode_auth_token(token);
         if (null == payload) {
             return ReturnBean.failReturn("", "refreshToken: 请登陆");
@@ -87,14 +91,16 @@ public class ApiController {
         return ReturnBean.successReturn(data, "refreshToken: 刷新成功");
     }
 
+    @ApiOperation("登出")
     @GetMapping("/logout")
     @LoginRequire
-    public ReturnBean logout(HttpSession session) {
+    public ReturnBean logout(@ApiIgnore HttpSession session) {
         session.removeAttribute("user_id");
         session.invalidate();
         return ReturnBean.successReturn("", "退出登陆");
     }
 
+    @ApiOperation("生成随机uuid")
     @GetMapping("/series")
     public ReturnBean series() {
         String[] uuid = UUID.randomUUID().toString().split("-");
@@ -103,9 +109,10 @@ public class ApiController {
         return ReturnBean.successReturn(map, "series: 生成随机uuid");
     }
 
+    @ApiOperation("获取用户信息")
     @GetMapping("/getUser")
     @LoginRequire
-    public ReturnBean getUser(HttpSession session) {
+    public ReturnBean getUser(@ApiIgnore HttpSession session) {
         Integer currentId = (Integer) session.getAttribute("user_id");
         // 已登录不可能为空
         User user = userService.findUserByID(currentId);
@@ -114,20 +121,22 @@ public class ApiController {
             return ReturnBean.failReturn("", "getUser: 获取信息失败");
         }
         Map<String, Object> data = Map.of("username", realname, "id", user.getId(), "root", user.getUserType());
-        return ReturnBean.successReturn(data, "getUser: 获取信息失败");
+        return ReturnBean.successReturn(data, "getUser: 获取信息成功");
     }
 
+    @ApiOperation("添加病人")
     @LoginRequire
     @PostMapping("/addPatient")
-    public ReturnBean addPatient(@RequestBody @Validated Patient patient, HttpSession session) {
+    public ReturnBean addPatient(@RequestBody @Validated AddPatientForm form, @ApiIgnore HttpSession session) {
         Integer doctorId = getCurrentDoctor(session);
-        Patient patient2 = patientService.findByRecordId(patient.getRecordId());
+        Patient patient = patientService.findByRecordId(form.getRecordId());
         String msg;
-        if (null != patient2) {
+        if (null != patient) {
             msg = "病人已存在，已更新数据";
-            patient = patient2.update(patient);
+            patient.update(form);
         } else {
             msg = "病人已成功添加";
+            patient = new Patient().update(form);
             patient.setDoctorId(doctorId);
         }
         patient = patientService.saveOrUpdate(patient);
@@ -135,18 +144,20 @@ public class ApiController {
         return ReturnBean.successReturn(data, msg);
     }
 
+    @ApiOperation("获取病人列表")
     @LoginRequire
     @GetMapping("/getPatients")
-    public ReturnBean getPatients(HttpSession session) {
+    public ReturnBean getPatients(@ApiIgnore HttpSession session) {
         Integer doctorId = getCurrentDoctor(session);
         List<Patient> patients = patientService.getAllPatients(doctorId);
         Map<String, Object> data = Map.of("patients", patients);
         return ReturnBean.successReturn(data, "getPatients： 获取病人列表成功");
     }
 
+    @ApiOperation("根据id获取病人")
     @LoginRequire
     @PostMapping("/getPatient")
-    public ReturnBean getPatient(@RequestBody @Validated PatientForm form, HttpSession session) {
+    public ReturnBean getPatient(@RequestBody @Validated PatientForm form, @ApiIgnore HttpSession session) {
         Integer id = form.getPatientId();
         Integer doctorID = getCurrentDoctor(session);
         Patient patient = patientService.getPatient(id, doctorID);
@@ -157,6 +168,7 @@ public class ApiController {
         return ReturnBean.successReturn(data, "getPatient: 获取病人成功");
     }
 
+    @ApiOperation("删除病人")
     @PostMapping("/delPatient")
     @LoginRequire
     public ReturnBean deletePatient(@RequestBody @Validated PatientForm form) throws DeleteUploadException {
@@ -167,9 +179,10 @@ public class ApiController {
         return ReturnBean.failReturn("", "delPatient: 删除失败");
     }
 
+    @ApiOperation("获取病人详细信息")
     @PostMapping("/getDetail")
     @LoginRequire
-    public ReturnBean getDetail(@RequestBody @Validated PatientForm form, HttpSession session) {
+    public ReturnBean getDetail(@RequestBody @Validated PatientForm form, @ApiIgnore HttpSession session) {
         Integer id = form.getPatientId();
         Integer doctorID = getCurrentDoctor(session);
         Patient patient = patientService.getPatient(id, doctorID);
@@ -181,6 +194,7 @@ public class ApiController {
         return ReturnBean.successReturn(data, "getDetail: 获取病人信息成功");
     }
 
+    @ApiOperation("获取图像信息")
     @PostMapping("/imgList")
     @LoginRequire
     public ReturnBean getImgList(@RequestBody @Validated PatientForm form) {
@@ -190,6 +204,7 @@ public class ApiController {
         return ReturnBean.successReturn(data, "imgList: 获取图像列表成功");
     }
 
+    @ApiOperation("更新用户信息")
     @PostMapping("/updateInfo")
     @LoginRequire
     public ReturnBean updateInfo(@RequestBody @Validated UpdateInfoForm form) {
@@ -202,9 +217,10 @@ public class ApiController {
         return ReturnBean.successReturn("", "updateInfo: 更新成功");
     }
 
+    @ApiOperation("获取用户列表")
     @GetMapping("/statistics")
     @LoginRequire()
-    public ReturnBean statistics(HttpSession session) {
+    public ReturnBean statistics(@ApiIgnore HttpSession session) {
         Integer doctorID = getCurrentDoctor(session);
         User cur = userService.findUserByID(doctorID);
         if (cur.getUserType() != 1) {
@@ -221,6 +237,7 @@ public class ApiController {
         return ReturnBean.successReturn(data, "statistics: 获取用户列表成功");
     }
 
+    @ApiOperation("获取用户详细信息")
     @PostMapping("/userDetail")
     @LoginRequire
     public ReturnBean userDetail(@RequestBody @Validated({ UserDetailValidGroup.class }) UpdateRoleForm form) {
@@ -234,6 +251,7 @@ public class ApiController {
         return ReturnBean.successReturn(data, "userDetail； 获取用户详细信息成功");
     }
 
+    @ApiOperation("更新用户权限")
     @PostMapping("/updateRole")
     @LoginRequire
     public ReturnBean updateRole(@RequestBody @Validated({ UserRoleValidGroup.class }) UpdateRoleForm form,

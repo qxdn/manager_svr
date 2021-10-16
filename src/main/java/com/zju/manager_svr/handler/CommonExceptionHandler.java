@@ -25,6 +25,6 @@ public class CommonExceptionHandler {
         msg.append(request.getRequestURI());
         msg.append(":出错");
         log.error(msg.toString(), exception);
-        return ReturnBean.failReturn(null, msg.toString());
+        return ReturnBean.failReturn("", msg.toString());
     }
 }

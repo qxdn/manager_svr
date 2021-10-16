@@ -7,8 +7,10 @@ import javax.validation.constraints.NotNull;
 import com.zju.manager_svr.valid.UserDetailValidGroup;
 import com.zju.manager_svr.valid.UserRoleValidGroup;
 
+import io.swagger.annotations.ApiModel;
 import lombok.Data;
 
+@ApiModel("更新用户权限或获取用户信息")
 @Data
 public class UpdateRoleForm {
 
